@@ -1,43 +1,47 @@
-# History files
+# ----------------------------
+# Python
+# ----------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# ----------------------------
+# R
+# ----------------------------
 .Rhistory
 .Rapp.history
-
-# Session Data files
 .RData
 .RDataTmp
-
-# User-specific files
 .Ruserdata
-
-# Example code in package build process
 *-Ex.R
-
-# Output files from R CMD build
 /*.tar.gz
-
-# Output files from R CMD check
 /*.Rcheck/
-
-# RStudio files
 .Rproj.user/
-
-# produced vignettes
-vignettes/*.html
-vignettes/*.pdf
-
-# OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
+.Renviron
 .httr-oauth
+rsconnect/
 
 # knitr and R markdown default cache directories
 *_cache/
-/cache/
-
-# Temporary files created by R markdown
+cache/
 *.utf8.md
 *.knit.md
-
-# R Environment Variables
-.Renviron
 
 # pkgdown site
 docs/
@@ -45,5 +49,36 @@ docs/
 # translation temp files
 po/*~
 
-# RStudio Connect folder
-rsconnect/
+# ----------------------------
+# OS-specific
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# ----------------------------
+# Exclude outputs & documents
+# ----------------------------
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.xlsm
+*.ods
+*.doc
+*.docx
+*.pdf
+*.rtf
+*.txt
+*.md
+*.png
+*.jpg
+*.jpeg
+*.tif
+*.tiff
+*.gif
+*.svg
+
+# ----------------------------
+# Exclude "old" folders (any case)
+# ----------------------------
+**/[Oo][Ll][Dd]/**
