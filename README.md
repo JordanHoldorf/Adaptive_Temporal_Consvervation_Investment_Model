@@ -91,7 +91,8 @@ Each run generates CSV files including:
 
 ## Citation
 
-If you use this code, please cite:
+If you use this code, please cite the code.  
+Citation metadata is provided in the [`CITATION.cff`](./CITATION.cff) file, which GitHub also uses to generate ready-to-use citations (APA, BibTeX, etc.) via the “Cite this repository” button.
 
 ---
 
