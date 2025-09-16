@@ -34,13 +34,8 @@ def Simulation_Model_Investment(file_path,
     import numpy as np
     import random as rnd
     import string
-
-    def _ensure_parent_dir(path: str):
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    def _to_csv(df, path: str, mode='w', **kwargs):
-        _ensure_parent_dir(path)
-        df.to_csv(path, mode=mode, **kwargs)
+    import time
+    from datetime import datetime
 
     rnd.seed(23)
 
@@ -79,6 +74,7 @@ def Simulation_Model_Investment(file_path,
         print("\nClimate seed values have updated. \n")
 
         for dis in discount:
+            start_run = time.perf_counter()
             for i in range(len(num_state)):
                 val_state = num_state[i]
                 start_point = 0
@@ -96,7 +92,7 @@ def Simulation_Model_Investment(file_path,
                 npv = np.zeros(shape=(years, loop), dtype="float")
                 pv = np.zeros(shape=(years, loop), dtype="float")
                 present_investment = np.zeros(shape=(years, loop), dtype="float")
-                profitability_index = np.zeros(shape=(years, loop), dtype="float")
+                profitability_index = np.full((years, loop), np.nan, dtype="float")
 
                 if val_state == 1:
                     investment_cost = cost_per_hectare * max_area
@@ -115,20 +111,25 @@ def Simulation_Model_Investment(file_path,
                                 area_overtime[year, k] = current_area
                                 Cumulative_area_overtime[year, k] = current_area
 
-                                carbon_sequestered = current_area * sequestration_rate - lost_carbon
-                                carbon_price = price_carbon * carbon_sequestered
-                                net_price = carbon_price - investment_cost
+                                carbon_sequestered_phys = current_area * sequestration_rate - lost_carbon
+                                carbon_sequestered_fin = max(0.0, carbon_sequestered_phys)
 
-                                Carbon_storage[year, k] = carbon_sequestered
-                                Cumulative_Carbon_storage[year, k] = carbon_sequestered
+                                carbon_revenue = price_carbon * carbon_sequestered_fin
+                                net_price = carbon_revenue - investment_cost
 
                                 net_position[year, k] = net_price
-                                pv[year, k] = carbon_price / discount_factor
+
+                                # keep physical carbon (can be negative) for carbon accounting
+                                Carbon_storage[year, k] = carbon_sequestered_phys
+                                Cumulative_Carbon_storage[year, k] = carbon_sequestered_phys
+
+                                # use floored (financial) carbon for money
+                                pv[year, k] = carbon_revenue / discount_factor
                                 npv[year, k] = net_price / discount_factor
-                                profitability_index[year, k] = (
-                                    0 if present_investment[year, k] == 0
-                                    else pv[year, k] / present_investment[year, k]
-                                )
+
+                                if present_investment[year, k] > 0:
+                                    profitability_index[year, k] = pv[year, k] / present_investment[year, k]
+                                # else leave as NaN
 
                             if year > 0:
                                 # carry forward investment (no new spend in invest-once case)
@@ -139,36 +140,80 @@ def Simulation_Model_Investment(file_path,
                                 current_area = round(current_area * climate_event_effect.iloc[year, k], 2)
 
                                 # benefits (no new investment cost in this branch after year 0)
-                                carbon_sequestered = current_area * sequestration_rate
-                                carbon_price = price_carbon * carbon_sequestered  # = net benefit this year
-                                net_price = carbon_price
+                                carbon_sequestered_phys = current_area * sequestration_rate
+                                carbon_sequestered_fin = max(0.0, carbon_sequestered_phys)
+
+                                carbon_revenue = price_carbon * carbon_sequestered_fin
+                                net_price = carbon_revenue
 
                                 # state updates
                                 area_overtime[year, k] = current_area
                                 Cumulative_area_overtime[year, k] = current_area + Cumulative_area_overtime[year - 1, k]
-                                Carbon_storage[year, k] = carbon_sequestered
-                                Cumulative_Carbon_storage[year, k] = carbon_sequestered + Cumulative_Carbon_storage[
-                                    year - 1, k]
+                                Carbon_storage[year, k] = carbon_sequestered_phys
+                                Cumulative_Carbon_storage[year, k] = carbon_sequestered_phys + \
+                                                                     Cumulative_Carbon_storage[year - 1, k]
 
                                 # finance metrics (add once)
                                 net_position[year, k] = net_position[year - 1, k] + net_price
-                                pv[year, k] = pv[year - 1, k] + carbon_price / discount_factor
+                                pv[year, k] = pv[year - 1, k] + carbon_revenue / discount_factor
                                 npv[year, k] = npv[year - 1, k] + net_price / discount_factor
 
                                 # PI
-                                profitability_index[year, k] = (
-                                    0 if present_investment[year, k] == 0
-                                    else pv[year, k] / present_investment[year, k]
-                                )
+                                if present_investment[year, k] > 0:
+                                    profitability_index[year, k] = pv[year, k] / present_investment[year, k]
+                                # else leave as NaN
 
                     net_position_df = pd.DataFrame(net_position)
+                    net_position_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/Net_position.csv",
+                        mode='w')
+
                     area_overtime_df = pd.DataFrame(area_overtime)
+                    area_overtime_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/Area.csv",
+                        mode='w')
+
                     npv_df = pd.DataFrame(npv)
+                    npv_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}/Climate_{climate}/npv.csv",
+                        mode='w')
+
                     pv_df = pd.DataFrame(pv)
+                    pv_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}/Climate_{climate}/pv.csv",
+                        mode='w')
+
                     profitability_index_df = pd.DataFrame(profitability_index)
+                    profitability_index_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}/Climate_{climate}/Ratio.csv",
+                        mode='w', na_rep="NA")
+
                     investment_present_df = pd.DataFrame(present_investment)
+                    investment_present_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/present_investment.csv",
+                        mode='w')
+
                     investment_overtime_df = pd.DataFrame(investment_overtime)
+                    investment_overtime_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/Investment_overtime.csv",
+                        mode='w')
+
                     Action_df = pd.DataFrame(action)
+                    Action_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/Action_taken.csv",
+                        mode='w')
+
+                    Cumulative_Carbon_df = pd.DataFrame(Cumulative_Carbon_storage)
+                    Cumulative_Carbon_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/Cumulative_Carbon_Stored.csv",
+                        mode='w'
+                    )
 
                     average_values_df = pd.DataFrame()
                     average_values_df['Mean_Profit'] = net_position.mean(axis=1)
@@ -234,24 +279,10 @@ def Simulation_Model_Investment(file_path,
                     average_values_df['Carbon_fifth_percentile'] = fifth_percentile_carbon
                     average_values_df['Carbon_nintyfifth_percentile'] = nintyfifth_percentile_carbon
 
-                    # Build a base folder for this discount × climate combo
-                    base_dir = os.path.join(
-                        file_path, "Using_investment_plan", "Invest_Once_States",
-                        f"Discount_{dis}", f"Climate_{climate}"
-                    )
-
-                    # Write outputs (parents will be created automatically)
-                    _to_csv(pd.DataFrame(net_position), os.path.join(base_dir, "Net_position.csv"))
-                    _to_csv(pd.DataFrame(area_overtime), os.path.join(base_dir, "Area.csv"))
-                    _to_csv(pd.DataFrame(npv), os.path.join(base_dir, "npv.csv"))
-                    _to_csv(pd.DataFrame(pv), os.path.join(base_dir, "pv.csv"))
-                    _to_csv(pd.DataFrame(profitability_index), os.path.join(base_dir, "Ratio.csv"))
-                    _to_csv(pd.DataFrame(present_investment), os.path.join(base_dir, "present_investment.csv"))
-                    _to_csv(pd.DataFrame(investment_overtime), os.path.join(base_dir, "Investment_overtime.csv"))
-                    _to_csv(pd.DataFrame(action), os.path.join(base_dir, "Action_taken.csv"))
-                    _to_csv(average_values_df, os.path.join(base_dir, "Average_Information.csv"))
-
-                    print(f"Run for {climate} Year Climate Return, {dis}%, Discount Rate and Invest Once. \n")
+                    average_values_df.to_csv(
+                        f"{file_path}/Using_investment_plan/Invest_Once_States/Discount_{dis}"
+                        f"/Climate_{climate}/Average_Information.csv",
+                        mode='w')
 
                 if val_state != 1:
                     investment_cost = investment[i-1]
@@ -275,7 +306,7 @@ def Simulation_Model_Investment(file_path,
                     states = states
 
                     investment_plan = pd.read_csv(
-                        f"{file_path}/SDP_Outputs/{val_state}_States/Discount_{dis}/Policy_output_{climate}.csv")
+                        f"{file_path}/SDP_Outputs_{years}Years/{val_state}_States/Discount_{dis}/Policy_output_{climate}.csv")
 
                     investment_plan.drop(columns=["Unnamed: 0", "Value"], axis="columns", inplace=True)
 
@@ -305,19 +336,28 @@ def Simulation_Model_Investment(file_path,
                                     state_position = min(state_position, len(states_areas) - 1)  # clamp
                                     current_area = states_areas[state_position] * climate_event_effect.iloc[year, k]
                                     current_area = round(current_area, 2)
-                                    carbon_sequestered = current_area * sequestration_rate - (carbon_lost*Num_invest)
-                                    carbon_price = price_carbon * carbon_sequestered
-                                    net_price = carbon_price - investment_cost*Num_invest
 
+                                    carbon_sequestered_phys = current_area * sequestration_rate - (
+                                                carbon_lost * Num_invest)
+                                    carbon_sequestered_fin = max(0.0, carbon_sequestered_phys)
+
+                                    carbon_revenue = price_carbon * carbon_sequestered_fin
+                                    net_price = carbon_revenue - (investment_cost * Num_invest)
+
+                                    # physical stocks (can be negative)
+                                    Carbon_storage[year, k] = carbon_sequestered_phys
+                                    Cumulative_Carbon_storage[year, k] = carbon_sequestered_phys  # no prior at year 0
+
+                                    # finance
+                                    pv[year, k] = carbon_revenue / discount_factor
+                                    npv[year, k] = net_price / discount_factor
+                                    net_position[year, k] = net_price  # start the series
+
+                                    # areas
                                     area_overtime[year, k] = current_area
                                     Cumulative_area_overtime[year, k] = current_area
 
-                                    Carbon_storage[year, k] = carbon_sequestered
-                                    Cumulative_Carbon_storage[year, k] = carbon_sequestered
 
-                                    net_position[year, k] = net_price
-                                    pv[year, k] = carbon_price / discount_factor
-                                    npv[year, k] = net_price / discount_factor
 
                                 else:
                                     investment_overtime[year, k] = investment_overtime[year - 1, k] + \
@@ -329,21 +369,26 @@ def Simulation_Model_Investment(file_path,
                                     current_area = states_areas[state_position] * climate_event_effect.iloc[year, k]
                                     current_area = round(current_area, 2)
 
-                                    carbon_sequestered = current_area * sequestration_rate - (carbon_lost*Num_invest)
-                                    carbon_price = price_carbon * carbon_sequestered
+                                    carbon_sequestered_phys = current_area * sequestration_rate - (
+                                                carbon_lost * Num_invest)
+                                    carbon_sequestered_fin = max(0.0, carbon_sequestered_phys)
 
-                                    net_price = carbon_price - (investment_cost*Num_invest)
+                                    carbon_revenue = price_carbon * carbon_sequestered_fin
+                                    net_price = carbon_revenue - (investment_cost * Num_invest)
 
+                                    # areas
                                     area_overtime[year, k] = current_area
-                                    Cumulative_area_overtime[year, k] = current_area + \
-                                                                        Cumulative_area_overtime[year - 1, k]
+                                    Cumulative_area_overtime[year, k] = current_area + Cumulative_area_overtime[
+                                        year - 1, k]
 
-                                    Carbon_storage[year, k] = carbon_sequestered
-                                    Cumulative_Carbon_storage[year, k] = carbon_sequestered + \
+                                    # physical carbon
+                                    Carbon_storage[year, k] = carbon_sequestered_phys
+                                    Cumulative_Carbon_storage[year, k] = carbon_sequestered_phys + \
                                                                          Cumulative_Carbon_storage[year - 1, k]
 
+                                    # finance
                                     net_position[year, k] = net_position[year - 1, k] + net_price
-                                    pv[year, k] = pv[year - 1, k] + carbon_price / discount_factor
+                                    pv[year, k] = pv[year - 1, k] + carbon_revenue / discount_factor
                                     npv[year, k] = npv[year - 1, k] + net_price / discount_factor
 
                             else:
@@ -363,25 +408,65 @@ def Simulation_Model_Investment(file_path,
                                 Cumulative_area_overtime[year, k] = current_area + Cumulative_area_overtime[year - 1, k]
 
                                 Carbon_storage[year, k] = carbon_sequestered
-                                Cumulative_Carbon_storage[year, k] = carbon_sequestered + \
-                                                                     Cumulative_Carbon_storage[year - 1, k]
+                                Cumulative_Carbon_storage[year, k] = carbon_sequestered + Cumulative_Carbon_storage[year - 1, k]
 
                                 pv[year, k] = pv[year - 1, k] + net_price / discount_factor
                                 npv[year, k] = npv[year - 1, k] + net_price / discount_factor
 
-                            profitability_index[year, k] = (
-                                0 if present_investment[year, k] == 0
-                                else pv[year, k] / present_investment[year, k]
-                            )
+                            if present_investment[year, k] > 0:
+                                profitability_index[year, k] = pv[year, k] / present_investment[year, k]
+                            # else leave as NaN
 
                     net_position_df = pd.DataFrame(net_position)
+                    net_position_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Net_position.csv",
+                        mode='w')
+
                     npv_df = pd.DataFrame(npv)
+                    npv_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}/Climate_{climate}/npv.csv",
+                        mode='w')
+
                     pv_df = pd.DataFrame(pv)
+                    pv_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}/Climate_{climate}/pv.csv",
+                        mode='w')
+
                     profitability_index_df = pd.DataFrame(profitability_index)
+                    profitability_index_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}/Climate_{climate}/Ratio.csv",
+                        mode='w', na_rep="NA")
+
                     investment_present_df = pd.DataFrame(present_investment)
+                    investment_present_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/present_investment.csv",
+                        mode='w')
+
                     investment_overtime_df = pd.DataFrame(investment_overtime)
+                    investment_overtime_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Investment_overtime.csv",
+                        mode='w')
+
                     Action_df = pd.DataFrame(action)
+                    Action_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Action_taken.csv",
+                        mode='w')
+
                     area_overtime_df = pd.DataFrame(area_overtime)
+                    area_overtime_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Area_overtime.csv",
+                        mode='w')
+
+                    Cumulative_Carbon_df = pd.DataFrame(Cumulative_Carbon_storage)
+                    Cumulative_Carbon_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Cumulative_Carbon_Stored.csv",
+                        mode='w')
 
                     average_values_df = pd.DataFrame()
                     average_values_df['Mean_Profit'] = net_position.mean(axis=1)
@@ -447,22 +532,12 @@ def Simulation_Model_Investment(file_path,
                     average_values_df['Carbon_fifth_percentile'] = fifth_percentile_carbon
                     average_values_df['Carbon_nintyfifth_percentile'] = nintyfifth_percentile_carbon
 
-                    base_dir = os.path.join(
-                        file_path, "Using_investment_plan", f"{val_state}_States",
-                        f"Discount_{dis}", f"Climate_{climate}"
-                    )
 
-                    _to_csv(net_position_df, os.path.join(base_dir, "Net_position.csv"))
-                    _to_csv(npv_df, os.path.join(base_dir, "npv.csv"))
-                    _to_csv(pv_df, os.path.join(base_dir, "pv.csv"))
-                    _to_csv(profitability_index_df, os.path.join(base_dir, "Ratio.csv"))
-                    _to_csv(investment_present_df, os.path.join(base_dir, "present_investment.csv"))
-                    _to_csv(investment_overtime_df, os.path.join(base_dir, "Investment_overtime.csv"))
-                    _to_csv(Action_df, os.path.join(base_dir, "Action_taken.csv"))
-                    _to_csv(area_overtime_df, os.path.join(base_dir, "Area_overtime.csv"))
-                    _to_csv(average_values_df, os.path.join(base_dir, "Average_Information.csv"))
+                    average_values_df.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Average_Information.csv",
+                        mode='w')
 
-                    print(f"Run for {climate} Year Climate Return, {dis}%, Discount Rate and {val_state} States. \n")
 
                     count_states = pd.DataFrame()
 
@@ -470,4 +545,12 @@ def Simulation_Model_Investment(file_path,
                         Count_value = (states_overtime == state.lower()).sum(axis=1)
                         count_states[f"{state}_Percentage"] = Count_value / loop
 
-                        _to_csv(count_states, os.path.join(base_dir, "Count_States.csv"))
+                    count_states.to_csv(
+                        f"{file_path}/Using_investment_plan/{val_state}_States/Discount_{dis}"
+                        f"/Climate_{climate}/Count_States.csv",
+                        mode='w')
+
+            elapsed = time.perf_counter() - start_run
+
+            print(f"Run for {climate} Year Climate Return, {dis}%, Discount Rate \n"
+                  f"Took {elapsed:.1f}s", flush=True)
