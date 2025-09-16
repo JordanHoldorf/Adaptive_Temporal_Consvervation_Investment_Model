@@ -1,5 +1,7 @@
 # Adaptive Temporal Conservation Investment Model
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17075222.svg)](https://doi.org/10.5281/zenodo.17075222)
+
 Code for modelling adaptive investment strategies in ecological restoration under climate risk.
 
 This repository implements a stochastic dynamic programming (SDP) framework and simulations of applying adaptive, year-by-year investment plans. These are compared with traditional “invest once” strategies under uncertain climate disturbances. The mangrove restoration case example evaluates outcomes in terms of Net Present Value (NPV), Profitability Index (PI), and environmental performance (area and carbon).
@@ -91,7 +93,11 @@ Each run generates CSV files including:
 
 ## Citation
 
-If you use this code, please cite:
+If you use this code, please cite the archived version:
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17075222.svg)](https://doi.org/10.5281/zenodo.17075222)
+
+Full citation metadata is provided in the [`CITATION.cff`](./CITATION.cff) file.  
 
 ---
 
