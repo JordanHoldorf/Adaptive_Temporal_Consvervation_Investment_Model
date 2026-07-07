@@ -1,6 +1,7 @@
 # Adaptive Temporal Conservation Investment Model
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17075222.svg)](https://doi.org/10.5281/zenodo.17075222)
+[![DOI](https://zenodo.org/badge/1052405541.svg)](https://doi.org/10.5281/zenodo.17075221)
+
 
 Code for modelling adaptive investment strategies in ecological restoration under climate risk.
 
